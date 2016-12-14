@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using NLog.Common;
 using RabbitMQ.Client;
-using RabbitMQ.Client.Framing.v0_9_1;
+using RabbitMQ.Client.Framing;
 
 namespace NLog.Targets
 {
@@ -13,13 +13,13 @@ namespace NLog.Targets
 	/// A RabbitMQ-target for NLog.
 	/// </summary>
 	[Target("RabbitMQ")]
-	public class RabbitMQ : TargetWithLayout
+	public class RabbitMq : TargetWithLayout
 	{
-		private IConnection _Connection;
-		private IModel _Model;
-		private readonly Encoding _Encoding = Encoding.UTF8;
-		private readonly DateTime _Epoch = new DateTime(1970, 1, 1, 0, 0, 0, 0);
-		private readonly List<Tuple<byte[], IBasicProperties, string>> _UnsentMessages
+		private IConnection _connection;
+		private IModel _model;
+		private readonly Encoding _encoding = Encoding.UTF8;
+		private readonly DateTime _epoch = new DateTime(1970, 1, 1, 0, 0, 0, 0);
+		private readonly List<Tuple<byte[], IBasicProperties, string>> _unsentMessages
 			= new List<Tuple<byte[], IBasicProperties, string>>(512);
 
 		#region Properties
@@ -170,10 +170,10 @@ namespace NLog.Targets
 			var message = GetMessage(logEvent);
 			var routingKey = string.Format(_Topic, logEvent.LogEvent.Level.Name);
 
-			if (_Model == null || !_Model.IsOpen)
+			if (_model == null || !_model.IsOpen)
 				StartConnection();
 
-			if (_Model == null || !_Model.IsOpen)
+			if (_model == null || !_model.IsOpen)
 			{
 				AddUnsent(routingKey, basicProperties, message);
 				return;
@@ -188,44 +188,44 @@ namespace NLog.Targets
 			{
 				InternalLogger.Error("Could not send to RabbitMQ instance! {0}", e.ToString());
 				AddUnsent(routingKey, basicProperties, message);
-				ShutdownAmqp(_Connection, new ShutdownEventArgs(ShutdownInitiator.Application, Constants.ChannelError, "Could not talk to RabbitMQ instance"));
+				ShutdownAmqp(_connection, new ShutdownEventArgs(ShutdownInitiator.Application, Constants.ChannelError, "Could not talk to RabbitMQ instance"));
 			}
 		}
 
 		private void AddUnsent(string routingKey, IBasicProperties basicProperties, byte[] message)
 		{
-			if (_UnsentMessages.Count < _MaxBuffer)
-				_UnsentMessages.Add(Tuple.Create(message, basicProperties, routingKey));
+			if (_unsentMessages.Count < _MaxBuffer)
+				_unsentMessages.Add(Tuple.Create(message, basicProperties, routingKey));
 			else
 				InternalLogger.Warn("MaxBuffer {0} filled. Ignoring message.", _MaxBuffer);
 		}
 
 		private void CheckUnsent()
 		{
-			var count = _UnsentMessages.Count;
+			var count = _unsentMessages.Count;
 
 			for (var i = 0; i < count; i++)
 			{
-				var tuple = _UnsentMessages[i];
+				var tuple = _unsentMessages[i];
 				InternalLogger.Info("publishing unsent message: {0}.", tuple);
 				Publish(tuple.Item1, tuple.Item2, tuple.Item3);
 			}
 
 			if (count > 0) 
-				_UnsentMessages.Clear();
+				_unsentMessages.Clear();
 		}
 
 		private void Publish(byte[] bytes, IBasicProperties basicProperties, string routingKey)
 		{
-			_Model.BasicPublish(_Exchange,
+			_model.BasicPublish( _Exchange,
 			                    routingKey,
-			                    true, false, basicProperties,
+			                    true, basicProperties,
 			                    bytes);
 		}
 
 		private byte[] GetMessage(AsyncLogEventInfo logEvent)
 		{
-			return _Encoding.GetBytes(Layout.Render(logEvent.LogEvent));
+			return _encoding.GetBytes(Layout.Render(logEvent.LogEvent));
 		}
 
 
@@ -239,7 +239,7 @@ namespace NLog.Targets
 			basicProperties.AppId = AppId ?? @event.LoggerName;
 
 			basicProperties.Timestamp = new AmqpTimestamp(
-				Convert.ToInt64((@event.TimeStamp - _Epoch).TotalSeconds));
+				Convert.ToInt64((@event.TimeStamp - _epoch).TotalSeconds));
 
 			// support Validated User-ID (see http://www.rabbitmq.com/extensions.html)
 			basicProperties.UserId = UserName;
@@ -262,17 +262,16 @@ namespace NLog.Targets
 		{
 			try
 			{
-				_Connection = GetConnectionFac().CreateConnection();
-				_Connection.ConnectionShutdown += ShutdownAmqp;
+				_connection = GetConnectionFac().CreateConnection();
+				_connection.ConnectionShutdown += ShutdownAmqp;
 
-				try { _Model = _Connection.CreateModel(); }
+				try { _model = _connection.CreateModel(); }
 				catch (Exception e)
 				{
 					InternalLogger.Error("could not create model", e);
 				}
 
-				if (_Model != null)
-					_Model.ExchangeDeclare(_Exchange, ExchangeType.Topic);
+				_model?.ExchangeDeclare(_Exchange, ExchangeType.Topic);
 			}
 			catch (Exception e)
 			{
@@ -294,7 +293,7 @@ namespace NLog.Targets
 		}
 
 		[MethodImpl(MethodImplOptions.Synchronized)]
-		private void ShutdownAmqp(IConnection connection, ShutdownEventArgs reason)
+		private void ShutdownAmqp(object connectionBoxed, ShutdownEventArgs reason)
 		{
 			// I can't make this NOT hang when RMQ goes down
 			// and then a log message is sent...
@@ -308,7 +307,7 @@ namespace NLog.Targets
 			//{
 			//    InternalLogger.Error("could not close model", e);
 			//}
-
+		    var connection = connectionBoxed as IConnection;
 			try
 			{
 				if (connection != null && connection.IsOpen)
@@ -328,7 +327,7 @@ namespace NLog.Targets
 
 		protected override void CloseTarget()
 		{
-			ShutdownAmqp(_Connection,
+			ShutdownAmqp(_connection,
 			             new ShutdownEventArgs(ShutdownInitiator.Application, Constants.ReplySuccess, "closing appender"));
 			
 			base.CloseTarget();
