@@ -17,12 +17,12 @@ namespace NLog.Targets
 			get { return _hostName = (_hostName ?? Dns.GetHostName()); }
 		}
 
-		public static string GetMessageInner(bool useJSON, Layout layout, LogEventInfo info)
+		public static string GetMessageInner(bool useJSON, Layout layout, LogEventInfo info, IList<Field> fields)
 		{
-			return GetMessageInner(useJSON, false, layout, info);
+			return GetMessageInner(useJSON, false, layout, info, fields);
 		}
 
-		public static string GetMessageInner(bool useJSON, bool useLayoutAsMessage, Layout layout, LogEventInfo info)
+		public static string GetMessageInner(bool useJSON, bool useLayoutAsMessage, Layout layout, LogEventInfo info, IList<Field> fields)
 		{
 			if (!useJSON)
 				return layout.Render(info);
@@ -55,7 +55,11 @@ namespace NLog.Targets
 				logLine.AddField((string)propertyPair.Key, propertyPair.Value);
 			}
 
-			logLine.EnsureADT();
+            if (fields != null)
+                foreach (Field field in fields)
+                    logLine.AddField(field.Key, field.Name, field.Layout.Render(info));
+
+            logLine.EnsureADT();
 
 			return JsonConvert.SerializeObject(logLine);
 		}

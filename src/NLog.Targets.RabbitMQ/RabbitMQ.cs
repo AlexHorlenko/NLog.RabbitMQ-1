@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
 using NLog.Common;
+using NLog.Config;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Framing;
 
@@ -165,9 +166,12 @@ namespace NLog.Targets
 
 	    public bool Durable { get; set; }
 
-	    #endregion
+        [ArrayParameter(typeof(Field), "field")]
+        public IList<Field> Fields { get; private set; }
 
-		protected override void Write(AsyncLogEventInfo logEvent)
+        #endregion
+
+        protected override void Write(AsyncLogEventInfo logEvent)
 		{
 			var basicProperties = GetBasicProperties(logEvent);
 			var message = GetMessage(logEvent);
@@ -228,7 +232,7 @@ namespace NLog.Targets
 
 		private byte[] GetMessage(AsyncLogEventInfo logEvent)
 		{
-		    var msg = MessageFormatter.GetMessageInner(UseJSON, Layout, logEvent.LogEvent);
+		    var msg = MessageFormatter.GetMessageInner(UseJSON, Layout, logEvent.LogEvent, Fields);
             return _encoding.GetBytes(msg);
 		}
 

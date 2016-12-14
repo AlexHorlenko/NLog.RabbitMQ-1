@@ -55,6 +55,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Field.cs" />
     <Compile Include="LogLine.cs" />
     <Compile Include="MessageFormatter.cs" />
     <Compile Include="RabbitMQ.cs" />
