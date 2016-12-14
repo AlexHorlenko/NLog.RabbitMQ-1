@@ -166,8 +166,14 @@ namespace NLog.Targets
 
 	    public bool Durable { get; set; }
 
+        private IList<Field> _fields = new List<Field>();
+
         [ArrayParameter(typeof(Field), "field")]
-        public IList<Field> Fields { get; private set; }
+        public IList<Field> Fields
+        {
+            get { return _fields; }
+            private set { _fields = value; }
+        }
 
         #endregion
 
