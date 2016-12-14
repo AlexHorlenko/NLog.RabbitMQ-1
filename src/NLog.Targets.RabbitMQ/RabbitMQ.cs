@@ -333,9 +333,7 @@ namespace NLog.Targets
 
 		protected override void CloseTarget()
 		{
-			ShutdownAmqp(_connection,
-			             new ShutdownEventArgs(ShutdownInitiator.Application, Constants.ReplySuccess, "closing appender"));
-			
+			ShutdownAmqp(_connection, new ShutdownEventArgs(ShutdownInitiator.Application, Constants.ReplySuccess, "closing appender"));
 			base.CloseTarget();
 		}
 	}
