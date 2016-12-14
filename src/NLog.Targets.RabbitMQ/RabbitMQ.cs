@@ -161,8 +161,11 @@ namespace NLog.Targets
 			set {  _heartBeatSeconds = value; }
 		}
 
+	    public bool UseJSON { get; set; }
 
-		#endregion
+	    public bool Durable { get; set; }
+
+	    #endregion
 
 		protected override void Write(AsyncLogEventInfo logEvent)
 		{
@@ -225,21 +228,20 @@ namespace NLog.Targets
 
 		private byte[] GetMessage(AsyncLogEventInfo logEvent)
 		{
-			return _encoding.GetBytes(Layout.Render(logEvent.LogEvent));
+		    var msg = MessageFormatter.GetMessageInner(UseJSON, Layout, logEvent.LogEvent);
+            return _encoding.GetBytes(msg);
 		}
 
-
-		private IBasicProperties GetBasicProperties(AsyncLogEventInfo loggingEvent)
+        private IBasicProperties GetBasicProperties(AsyncLogEventInfo loggingEvent)
 		{
 			var @event = loggingEvent.LogEvent;
 			
 			var basicProperties = new BasicProperties();
 			basicProperties.ContentEncoding = "utf8";
-			basicProperties.ContentType = "text/plain";
+			basicProperties.ContentType = UseJSON ? "application/json" : "text/plain";
 			basicProperties.AppId = AppId ?? @event.LoggerName;
 
-			basicProperties.Timestamp = new AmqpTimestamp(
-				Convert.ToInt64((@event.TimeStamp - _epoch).TotalSeconds));
+			basicProperties.Timestamp = new AmqpTimestamp(MessageFormatter.GetEpochTimeStamp(@event));
 
 			// support Validated User-ID (see http://www.rabbitmq.com/extensions.html)
 			basicProperties.UserId = UserName;
@@ -271,7 +273,7 @@ namespace NLog.Targets
 					InternalLogger.Error("could not create model", e);
 				}
 
-				_model?.ExchangeDeclare(_Exchange, ExchangeType.Topic);
+				_model?.ExchangeDeclare(_Exchange, ExchangeType.Topic, Durable);
 			}
 			catch (Exception e)
 			{
